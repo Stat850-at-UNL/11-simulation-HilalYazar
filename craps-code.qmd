@@ -3,20 +3,14 @@ title: "Craps Simulation"
 format: html
 ---
 
-
-In this document, you should create, code, and demonstrate each function you described in [`pseudocode.qmd`](pseudocode.qmd).
-File your functions under the appropriate header. 
-Each function should have its own code chunk, which is properly set up with the appropriate programming language indicated.
-I have provided skeleton code chunks for your required functions using R syntax, but you are free to use Python or any other language covered in class. 
-Please delete or fill in my chunks with your own code.
-
-Make sure this document compiles before you submit your answers.
+In this document, I created, code, and demonstrate each function I described in [`pseudocode.qmd`](pseudocode.qmd).
 
 # Helper Functions
 
 ## `roll_dice`
 
 ```{r}
+library(dplyr)
 roll_dice <- function() {
   # Input: None
   # Output: an integer from 1:12
@@ -29,18 +23,175 @@ roll_dice <- function() {
 ```{r}
 roll_dice()
 ```
+## `check_come_out_roll`
+```{r}
+check_come_out_roll <- function(roll) {
+  # Input: roll - an integer representing the roll of the dice
+  # Output: a character string, either "win", "loss", or "point"
+  # Description: Determines if the come-out roll is a winning roll, losing roll, or establishes a point
+  if (roll %in% c(7, 11)) {
+    return("win")
+  } else if (roll %in% c(2, 3, 12)) {
+    return("loss")
+  } else {
+    return("point")
+  }
+}
+```
+
+```{r}
+# Example call with a specific roll value
+roll <- 8  # Replace 8 with any integer representing a dice roll
+check_come_out_roll(roll)
+
+```
+## `play_point_phase`
+```{r}
+play_point_phase <- function(point) {
+  # Input: point - an integer representing the established point
+  # Output: a character string, either "win" or "loss"
+  # Description: Simulates the point phase by rolling until the player either rolls the point (win) or a 7 (loss)
+  repeat {
+    roll <- roll_dice()
+    if (roll == point) {
+      return("win")
+    } else if (roll == 7) {
+      return("loss")
+    }
+  }
+}
+```
+
+```{r}
+point <- 4
+play_point_phase(point)
+```
+
+## `record_roll`
+```{r}
+record_roll <- function(game_data, roll_id, roll, outcome) {
+  # Input: 
+  #   - game_data: the data frame to store game details
+  #   - roll_id: the current roll number (integer)
+  #   - roll: the result of the roll (integer)
+  #   - outcome: the outcome of the roll (e.g., "win", "loss", "continue")
+  # Output: an updated game_data data frame with the new roll recorded
+  # Description: Adds a row to the game data frame for each roll with its result and outcome
+  game_data <- rbind(game_data, data.frame(id = roll_id, roll = roll, outcome = outcome, stringsAsFactors = FALSE))
+  return(game_data)
+}
+
+```
+
+```{r}
+# Example initialization of game_data
+game_data <- data.frame(id = integer(), roll = integer(), outcome = character(), stringsAsFactors = FALSE)
+
+# Example values for a roll
+roll_id <- 1
+roll <- 7
+outcome <- "win"
+
+# Call record_roll with the required arguments
+recorded_game_data <- record_roll(game_data, roll_id, roll, outcome)
+
+# Print the result to see the updated game data
+print(recorded_game_data)
 
 
+```
 
+```{r}
+
+determine_game_outcome <- function(roll, point) {
+  # Input: 
+  #   - roll: the roll total from the dice (integer)
+  #   - point: the established point, or NA if no point (integer or NA)
+  # Output: a character string, either "win", "loss", or "continue"
+  # Description: Checks if the roll is a win (matching the point), a loss (rolling 7), or if the game should continue
+  if (!is.na(point)) {
+    if (roll == point) {
+      return("win")
+    } else if (roll == 7) {
+      return("loss")
+    } else {
+      return("continue")
+    }
+  } else {
+    return(check_come_out_roll(roll))
+  }
+}
+
+```
+
+```{r}
+# Example values for roll and point
+roll <- 5  # Replace 5 with the roll value you want to test
+point <- 4 # Replace 4 with the point value
+
+# Call determine_game_outcome with both roll and point
+determine_game_outcome(roll, point)
+
+```
 # Main Functions
 
 ## `simulate_craps_game`
 ```{r}
 simulate_craps_game <- function() {
-  # Input: 
-  # Output: 
-  # Description:
+  # Input: None
+  # Output: A data frame with columns: id (roll number), roll (sum of dice), 
+  #         outcome (win, loss, or continue), and point (if point is established).
+  # Description: Simulates a single game of craps by:
+  #              1. Performing the come-out roll and checking if it results in an immediate win/loss or establishes a point.
+  #              2. If a point is established, continuing to roll until either the point is rolled (win) or a 7 is rolled (loss).
+
+  # Initialize the game data
+  game_data <- data.frame(
+    id = integer(),
+    roll = integer(),
+    outcome = character(),
+    stringsAsFactors = FALSE
+  )
+  
+  roll_id <- 1
+  point <- NA
+  
+  # First roll (come-out roll)
+  roll <- roll_dice()
+  if (roll %in% c(7, 11)) {
+    outcome <- "win"
+  } else if (roll %in% c(2, 3, 12)) {
+    outcome <- "loss"
+  } else {
+    outcome <- "continue"
+    point <- roll
+  }
+  game_data[roll_id, ] <- list(roll_id, roll, outcome)
+  
+  # Continue rolling if point is established
+  if (outcome == "continue") {
+    repeat {
+      roll_id <- roll_id + 1
+      roll <- roll_dice()
+      
+      if (roll == point) {
+        outcome <- "win"
+        game_data[roll_id, ] <- list(roll_id, roll, outcome)
+        break
+      } else if (roll == 7) {
+        outcome <- "loss"
+        game_data[roll_id, ] <- list(roll_id, roll, outcome)
+        break
+      } else {
+        outcome <- "continue"
+        game_data[roll_id, ] <- list(roll_id, roll, outcome)
+      }
+    }
+  }
+  
+  return(game_data)
 }
+
 ```
 
 ```{r}
@@ -49,11 +200,32 @@ simulate_craps_game()
 
 ## `summarize_craps_game`
 ```{r}
-summarize_craps_game <- function() {
-  # Input: 
-  # Output: 
-  # Description:
+summarize_craps_game <- function(game_data) {
+  # Input: game_data - Data frame containing rolls for a single game
+  # Output: A summary data frame with one row containing n_rolls, outcome, and point
+  # Description: Summarizes the game by counting the rolls, checking the final outcome, 
+  #              and identifying the established point if the game continued.
+
+  n_rolls <- nrow(game_data)
+  final_outcome <- tail(game_data$outcome, 1)
+  
+  # Get the point from the first roll if it was "continue"
+  if (n_rolls > 1 && game_data$outcome[1] == "continue") {
+    point <- game_data$roll[1]
+  } else {
+    point <- NA
+  }
+  
+  summary <- data.frame(
+    n_rolls = n_rolls,
+    outcome = final_outcome,
+    point = point,
+    stringsAsFactors = FALSE
+  )
+  
+  return(summary)
 }
+
 ```
 
 ```{r}
@@ -64,9 +236,26 @@ simulate_craps_game() %>% summarize_craps_game()
 ```{r}
 run_craps_simulation <- function(N) {
   # Input: an integer N which determines the number of games to simulate
-  # Output: 
-  # Description:
+  # Output: A data frame with summary data for each game
+  # Description: Runs N simulations of craps games and returns a summary for each game
+
+  # Initialize data frame to store summary of each game
+  summaries <- data.frame(
+    n_rolls = integer(),
+    outcome = character(),
+    point = integer(),
+    stringsAsFactors = FALSE
+  )
+  
+  for (i in 1:N) {
+    game_data <- simulate_craps_game()
+    summary <- summarize_craps_game(game_data)
+    summaries <- rbind(summaries, summary)
+  }
+  
+  return(summaries)
 }
+
 ```
 
 ```{r}
