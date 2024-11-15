@@ -1,0 +1,258 @@
+---
+title: "Craps Simulation and Probability Calculations"
+format: html
+---
+
+In this document, I used each function described in `pseudocode.qmd` and `craps-code.qmd` to answer the probability question about Craps: **What is the distribution of the number of rolls required to win or lose a game of Craps?**
+
+
+**Simulate a single game of Craps and record rolls until a win/loss**
+```{r simulate_game}
+library(dplyr)
+library(ggplot2)
+
+roll_dice <- function() {
+  sample(1:6, 2, replace = TRUE) %>% sum()
+}
+
+check_come_out_roll <- function(roll) {
+  if (roll %in% c(7, 11)) {
+    return("win")
+  } else if (roll %in% c(2, 3, 12)) {
+    return("loss")
+  } else {
+    return("point")
+  }
+}
+
+simulate_game <- function() {
+  roll_count <- 0
+  roll <- roll_dice()
+  roll_count <- roll_count + 1
+  outcome <- check_come_out_roll(roll)
+  
+  if (outcome == "win" || outcome == "loss") {
+    return(data.frame(outcome = outcome, rolls = roll_count))
+  } else {
+    # Enter the point phase
+    point <- roll
+    repeat {
+      roll <- roll_dice()
+      roll_count <- roll_count + 1
+      if (roll == point) {
+        return(data.frame(outcome = "win", rolls = roll_count))
+      } else if (roll == 7) {
+        return(data.frame(outcome = "loss", rolls = roll_count))
+      }
+    }
+  }
+}
+```
+
+**Run Multiple Games and Collect Results**
+```{r}
+simulate_craps_games <- function(n_games = 10000) {
+  results <- do.call(rbind, replicate(n_games, simulate_game(), simplify = FALSE))
+  return(results)
+}
+```
+
+**Run the simulation**
+```{r}
+library(dplyr)
+set.seed(123)  # For reproducibility
+simulation_results <- simulate_craps_games(10000)
+```
+
+**Summarize win/loss results**
+```{r}
+table(simulation_results$outcome)
+```
+
+**Calculation of the Average Number of Rolls to Resolve a Game**
+```{r}
+
+average_rolls <- mean(simulation_results$rolls)
+cat("The average number of rolls to resolve a game of Craps is:", round(average_rolls, 2), "\n")
+
+```
+
+**Compare Number of Rolls for Wins vs. Losses**
+```{r}
+rolls_by_outcome <- simulation_results %>%
+  group_by(outcome) %>%
+  summarize(avg_rolls = mean(rolls), max_rolls = max(rolls), .groups = "drop")
+
+print(rolls_by_outcome)
+```
+**To check if my simulation is good enough or not (seeing sampling variability)**
+```{r}
+# Load required libraries
+library(dplyr)
+library(ggplot2)
+
+# Define function to simulate a single game of Craps and record rolls until a win/loss
+simulate_game <- function() {
+  roll_count <- 0
+  roll <- roll_dice()
+  roll_count <- roll_count + 1
+  outcome <- check_come_out_roll(roll)
+  
+  if (outcome == "win" || outcome == "loss") {
+    return(data.frame(outcome = outcome, rolls = roll_count))
+  } else {
+    point <- roll
+    repeat {
+      roll <- roll_dice()
+      roll_count <- roll_count + 1
+      if (roll == point) {
+        return(data.frame(outcome = "win", rolls = roll_count))
+      } else if (roll == 7) {
+        return(data.frame(outcome = "loss", rolls = roll_count))
+      }
+    }
+  }
+}
+
+# Function to run multiple games in a single set
+simulate_craps_games <- function(n_games = 10000) {
+  results <- do.call(rbind, replicate(n_games, simulate_game(), simplify = FALSE))
+  return(results)
+}
+
+# Function to run multiple sets of simulations
+simulate_craps_multiple_sets <- function(n_sets = 10, n_games = 10000) {
+  results <- data.frame(set = integer(), win_rate = numeric(), avg_rolls = numeric())
+  
+  for (i in 1:n_sets) {
+    # Simulate a set of games
+    simulation_results <- simulate_craps_games(n_games)
+    
+    # Calculate win rate and average rolls for this set
+    win_rate <- mean(simulation_results$outcome == "win")
+    avg_rolls <- mean(simulation_results$rolls)
+    
+    # Store results in a dataframe
+    results <- rbind(results, data.frame(set = i, win_rate = win_rate, avg_rolls = avg_rolls))
+  }
+  
+  return(results)
+}
+
+# Run multiple sets of simulations
+set.seed(123)
+sampling_variability_results <- simulate_craps_multiple_sets(n_sets = 10, n_games = 10000)
+
+# View results
+print(sampling_variability_results)
+
+```
+
+**Also to confirm the adequacy of my simulation by comparing the simulated median win probability with the theoretical probability**
+```{r}
+# Calculate median win probability across simulations
+median_win_probability <- median(sampling_variability_results$win_rate)
+
+# Print and compare with theoretical probability
+theoretical_probability <- 0.4929
+cat("Median Win Probability from Simulation:", round(median_win_probability, 4), "\n")
+cat("Theoretical Win Probability:", theoretical_probability, "\n")
+
+# Interpretation
+if (abs(median_win_probability - theoretical_probability) < 0.01) {
+  cat("The simulated median win probability is close to the theoretical probability, indicating that the simulation is likely accurate.\n")
+} else {
+  cat("There is a notable difference between the simulated and theoretical probabilities, suggesting that adjustments to the simulation may be needed.\n")
+}
+
+```
+
+**Visualize the results**
+```{r}
+library(ggplot2)
+
+# 1. Histogram of Rolls to Resolution
+ggplot(simulation_results, aes(x = rolls)) +
+  geom_histogram(binwidth = 1, fill = "steelblue", color = "black") +
+  labs(
+    title = "Distribution of Rolls to Resolve in Craps",
+    subtitle = "Most games resolve in fewer rolls, with a long tail for prolonged games",
+    x = "Number of Rolls",
+    y = "Frequency"
+  ) +
+  annotate("text", x = 3, y = 3000, label = "High peak near 2 rolls", color = "red", size = 4, angle = 0, hjust = 0) +
+  theme_minimal()
+
+# 2. Time Series of Winning Probability by Number of Rolls
+win_probability_by_roll <- simulation_results %>%
+  group_by(rolls) %>%
+  summarize(win_rate = mean(outcome == "win"))
+
+ggplot(win_probability_by_roll, aes(x = rolls, y = win_rate)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "red") +
+  geom_hline(yintercept = mean(simulation_results$outcome == "win"), linetype = "dashed", color = "darkgreen") +
+  labs(
+    title = "Winning Probability by Number of Rolls in Craps",
+    subtitle = "Winning probability fluctuates initially but stabilizes over time",
+    x = "Number of Rolls",
+    y = "Winning Probability"
+  ) +
+  theme_minimal()
+
+#3.Boxplot of Rolls for Wins and Losses 
+ggplot(simulation_results, aes(x = outcome, y = rolls, fill = outcome)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("win" = "lightgreen", "loss" = "salmon")) +
+  labs(
+    title = "Number of Rolls to Resolve a Game: Wins vs. Losses",
+    x = "Outcome",
+    y = "Number of Rolls"
+  ) +
+  theme_minimal()
+
+#4.Visualize sampling variability - Boxplot of Win Probability Across Simulations
+
+ggplot(sampling_variability_results, aes(x = "", y = win_rate)) +
+  geom_boxplot(fill = "lightblue") +
+  labs(
+    title = "Variability in Win Probability Across Simulations",
+    y = "Win Probability"
+  ) +
+  theme_minimal()
+
+#5.# Comparison Plot
+ggplot(sampling_variability_results, aes(y = win_rate)) +
+  geom_boxplot(fill = "lightblue") +
+  geom_hline(yintercept = theoretical_probability, color = "darkgreen", linetype = "dashed") +
+  labs(
+    title = "Comparison of Simulated Win Probability to Theoretical Probability",
+    y = "Win Probability",
+    subtitle = "Dashed line represents the theoretical probability (49.29%)"
+  ) +
+  theme_minimal()
+
+```
+
+**Interpretation of Results**
+
+**#Interpretation of the 1st histogram**: The histogram showing a high peak near a low number of rolls with a long tail that drops off gradually is typical. It reflects that while most games end quickly, some games can last longer but are much less frequent. This distribution is normal for Craps games, indicating that most games are resolved in a few rolls.
+
+**#Interpretation of the 2nd histogram**: The line plot of winning probability by the number of rolls reveals an interesting dynamic in the game of Craps. We see that for lower roll counts, there is generally a higher likelihood of the game ending in a win or loss quickly, with the winning probability fluctuating as the roll count increases. However, as the roll count increases, the probability of winning appears to stabilize, suggesting that longer games have an increasingly predictable outcome in terms of win/loss ratios.
+
+**#Interpretation of the Boxplot for Wins vs. Losses**
+
+The boxplot visualizes the number of rolls needed to resolve a game based on the outcome (win or loss).
+
+- **Median Rolls**: The median roll count is slightly lower for wins than for losses, showing that winning games tend to resolve faster.
+- **Interquartile Range (IQR)**: The spread (IQR) is also narrower for wins, suggesting a more predictable range of rolls required to win a game, while losses exhibit a broader range, indicating higher variability.
+- **Outliers**: The presence of some outliers in both win and loss distributions suggests that while most games are resolved within a few rolls, a few games last significantly longer than typical.
+
+**#Interpretation of the Boxplot of Win Probability Across Simulations**:  This boxplot suggests that my simulation is robust and consistent. The variability is low, meaning that repeated simulations yield a relatively narrow range of win probabilities, supporting the accuracy and reliability of our simulated data. This stability is a positive indicator, showing that our simulation method is likely providing a good estimate of the win probability in Craps.
+
+
+**#Interpretation of Comparison Plot**:The median win probability from the simulations aligns closely with this theoretical probability, supporting the adequacy of my simulation model.
+
+**Potential Limitations of my Simulation**
+One limitation of this simulation is that it assumes each game is independent, with no influence from previous games. Additionally, the random number generator may introduce minor variations in results, although the sample size is large enough to mitigate this effect.
+
